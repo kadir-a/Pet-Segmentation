@@ -22,7 +22,7 @@ The core model has been deployed as a low-latency, stateless REST API.
 * **Zero-Latency I/O:** Images are processed entirely in-memory using `io.BytesIO`. The API never writes to disk, preventing I/O bottlenecks and ensuring sub-second inference times (~120ms).
 * **Singleton Model Pattern:** The ~44MB PyTorch model is loaded into memory exactly once at startup, preventing memory leaks and avoiding reloading overhead on every HTTP request.
 * **Containerized OS:** Uses `python:3.10-slim-bookworm` (Debian 12) with minimal dependencies for a secure and lightweight container footprint (~500MB RAM usage).
-```markdown 
+ 
 ### 🐳 Quick Start (Docker Deployment)
 
 You don't need Python or PyTorch installed on your host machine. **Docker** is the only requirement. Ensure your `best_transfer_model.pth` weight file is placed in the `weights/` directory.
@@ -50,7 +50,7 @@ curl -X POST "http://localhost:8000/predict" \
 ```
 
 ##  Part 2: Model Development & R&D (v1.0)
-```
+
 
 The core objective is not merely to maximize a benchmark metric, but to analyze how architectural design, loss construction, and data-pipeline discipline affect **boundary fidelity**, **fine-structure recovery**, and **training robustness** in real-world segmentation workflows.
 
