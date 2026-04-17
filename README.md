@@ -1,6 +1,54 @@
-#  Oxford-IIIT Pet Semantic Segmentation
+# 🐾 Pet Semantic Segmentation: End-to-End Pipeline
 
-A production-oriented semantic segmentation project focused on **pixel-level foreground/background separation** on the **Oxford-IIIT Pet Dataset**. The repository documents the full architectural progression from a baseline `FCN`, to a scratch `U-Net`, and ultimately to a **ResNet18-encoder U-Net** optimized through transfer learning.
+![Python](https://img.shields.io/badge/Python-3.10-blue?style=flat-square&logo=python)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.1.2-EE4C2C?style=flat-square&logo=pytorch)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109.0-009688?style=flat-square&logo=fastapi)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)
+![Version](https://img.shields.io/badge/Version-2.0.0-success?style=flat-square)
+
+An end-to-end, production-oriented semantic segmentation project focused on pixel-level foreground/background separation on the **Oxford-IIIT Pet Dataset**. 
+
+This repository bridges the gap between Data Science (R&D) and MLOps (Production). It documents the full architectural progression from a baseline model to a fine-tuned **ResNet18 U-Net**, which is now wrapped into a high-performance **FastAPI** microservice and fully isolated within a **Docker** environment.
+
+---
+
+##  Part 1: Production API & MLOps (v2.0)
+
+The core model has been deployed as a low-latency, stateless REST API. 
+
+###  System Design & Performance
+`Client Request` ➔ `FastAPI (Async)` ➔ `RAM (BytesIO)` ➔ `Singleton PyTorch Model` ➔ `Binary Mask Response`
+
+* **Zero-Latency I/O:** Images are processed entirely in-memory using `io.BytesIO`. The API never writes to disk, preventing I/O bottlenecks and ensuring sub-second inference times (~120ms).
+* **Singleton Model Pattern:** The ~44MB PyTorch model is loaded into memory exactly once at startup, preventing memory leaks and avoiding reloading overhead on every HTTP request.
+* **Containerized OS:** Uses `python:3.10-slim-bookworm` (Debian 12) with minimal dependencies for a secure and lightweight container footprint (~500MB RAM usage).
+
+### 🐳 Quick Start (Docker Deployment)
+
+You don't need Python or PyTorch installed on your host machine. **Docker** is the only requirement. Ensure your `best_transfer_model.pth` weight file is placed in the `weights/` directory.
+
+```bash
+# 1. Build the production image
+docker build -t pet_segmentation_api:v2.0 -f deployment/Dockerfile .
+
+# 2. Run the container in detached mode (Port 8000)
+docker run -d --name pet_seg_service -p 8000:8000 pet_segmentation_api:v2.0
+
+Access the API: The API will be live instantly. Access the interactive Swagger UI to test the endpoints:
+
+👉 http://localhost:8000/docs
+
+Example Request
+You can easily test the inference endpoint using curl
+
+curl -X POST "http://localhost:8000/predict" \
+     -H "accept: image/png" \
+     -H "Content-Type: multipart/form-data" \
+     -F "file=@assets/hero_image.png" \
+     --output predicted_mask.png
+
+
+##  Part 2: Model Development & R&D (v1.0)
 
 The core objective is not merely to maximize a benchmark metric, but to analyze how architectural design, loss construction, and data-pipeline discipline affect **boundary fidelity**, **fine-structure recovery**, and **training robustness** in real-world segmentation workflows.
 
@@ -257,13 +305,14 @@ To support reproducible experimentation, the repository was prepared with the fo
 - **ResNet18 + U-Net** delivered the best balance of segmentation quality, fine-detail recovery, and engineering efficiency.
 - Correct treatment of **trimap ambiguity** and **augmentation policy separation** was essential for stable optimization.
 
-##  Planned Extensions
+##  Roadmap & Future Improvements
 
-The following items are prioritized for future releases to transition this project from a research-oriented notebook to a production-ready system:
+While the project has successfully transitioned from an R&D notebook to a production-ready API, the following milestones are prioritized for future releases:
 
-- [ ] **Model Serving:** Deploy the inference pipeline as a REST API using **FastAPI** for real-time interaction.
-- [ ] **Containerization:** Package the entire environment and dependencies using **Docker** to ensure cross-platform reproducibility.
-- [ ] **Optimization:** Export the trained models to **ONNX** or **TensorRT** to improve inference latency on edge devices.
+- [x] **Model Serving:** Deployed the inference pipeline as a stateless REST API using **FastAPI**.
+- [x] **Containerization:** Packaged the production environment and dependencies using **Docker**.
+- [ ] **Edge Optimization:** Export the trained models to **ONNX** or **TensorRT** to improve inference latency on edge devices.
+- [ ] **Batch Inference:** Implement an endpoint to handle multiple images simultaneously.
 - [ ] **Advanced Loss Functions:** Implement and compare **Dice Loss** and **Focal Loss** to further refine the segmentation of fine anatomical structures.
 
 ##  License
