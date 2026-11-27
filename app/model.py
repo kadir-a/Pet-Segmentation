@@ -6,13 +6,16 @@ pipeline for the ResNet18 U-Net pet segmentation model.
 """
 
 import io
-from pathlib import Path
 
 import numpy as np
+import segmentation_models_pytorch as smp
 import torch
 from PIL import Image
 from torchvision import transforms
-import segmentation_models_pytorch as smp
+
+
+class InvalidImage(ValueError):
+    """Uploaded bytes could not be decoded as an image."""
 
 
 class PetSegmentationModel:
@@ -80,7 +83,11 @@ class PetSegmentationModel:
                          (0: Background, 255: Pet).
         """
         # 1. Preprocessing
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as source:
+                image = source.convert("RGB")
+        except (OSError, SyntaxError, ValueError) as error:
+            raise InvalidImage("Could not decode the uploaded image.") from error
         input_tensor = self.preprocess(image).unsqueeze(0).to(self.device)
 
         # 2. Inference
@@ -95,19 +102,3 @@ class PetSegmentationModel:
         mask_image_array = (mask * 255).astype(np.uint8)
         
         return Image.fromarray(mask_image_array, mode="L")
-
-
-# ==========================================
-# Module-Level Singleton Initialization
-# ==========================================
-# This prevents FastAPI from reloading the model on every incoming request
-# by keeping a single instance active in memory.
-
-# Resolve the physical location of model.py (inside the 'app' folder)
-CURRENT_DIR = Path(__file__).resolve().parent
-
-# Navigate one directory up and target the 'weights' folder
-WEIGHT_PATH = CURRENT_DIR.parent / "weights" / "best_transfer_model.pth"
-
-# Initialize the global model instance
-pet_model = PetSegmentationModel(weight_path=str(WEIGHT_PATH))

@@ -1,3 +1,5 @@
+[![CI](https://github.com/kadir-a/Pet-Segmentation/actions/workflows/ci.yml/badge.svg)](https://github.com/kadir-a/Pet-Segmentation/actions/workflows/ci.yml)
+
 # 🐾 Pet Semantic Segmentation: End-to-End Pipeline
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue?style=flat-square&logo=python)
@@ -320,3 +322,14 @@ While the project has successfully transitioned from an R&D notebook to a produc
 ##  License
 
 This project is licensed under the **MIT License**. You are free to use, modify, and distribute this software for academic and commercial purposes.
+
+## Testing
+
+Use a Python 3.10 virtual environment. Install dependencies once, then run the offline suite without API keys or model weights.
+
+```bash
+pip install --index-url https://download.pytorch.org/whl/cpu torch==2.1.2 torchvision==0.16.2
+pip install -r requirements.txt -r requirements-dev.txt -r requirements_api.txt
+ruff check
+pytest -q --cov=app
+```
