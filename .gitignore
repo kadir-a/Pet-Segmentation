@@ -19,3 +19,9 @@ data/
 outputs/
 wandb/
 weights/*.pth
+
+.env
+.env.*
+*.pdf
+.ruff_cache/
+.coverage*

@@ -11,10 +11,10 @@ from typing import Dict, List, Sequence, Tuple
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -158,7 +158,9 @@ def calculate_metrics(preds, targets, num_classes=2, ignore_index=255):
     return miou, mdice
 
 
-def calculate_iou_for_image(pred_mask: torch.Tensor, true_mask: torch.Tensor, ignore_index: int = 255) -> float:
+def calculate_iou_for_image(
+    pred_mask: torch.Tensor, true_mask: torch.Tensor, ignore_index: int = 255
+) -> float:
     valid_pixels = (true_mask != ignore_index)
     pred_valid = pred_mask[valid_pixels]
     true_valid = true_mask[valid_pixels]
@@ -326,7 +328,9 @@ class ResNet18UNet(nn.Module):
         return self.model(x)
 
 
-def make_dataloader(dataset: Dataset, batch_size: int, shuffle: bool, num_workers: int) -> DataLoader:
+def make_dataloader(
+    dataset: Dataset, batch_size: int, shuffle: bool, num_workers: int
+) -> DataLoader:
     return DataLoader(
         dataset,
         batch_size=batch_size,
@@ -378,7 +382,13 @@ def create_augmented_loaders(paths: DataPaths, config: RuntimeConfig):
     return train_loader, test_loader
 
 
-def evaluate_model(model: nn.Module, data_loader: DataLoader, criterion: nn.Module, device: torch.device, description: str):
+def evaluate_model(
+    model: nn.Module,
+    data_loader: DataLoader,
+    criterion: nn.Module,
+    device: torch.device,
+    description: str,
+):
     model.eval()
     total_loss = 0.0
     total_miou = 0.0
@@ -400,7 +410,19 @@ def evaluate_model(model: nn.Module, data_loader: DataLoader, criterion: nn.Modu
     }
 
 
-def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, optimizer: optim.Optimizer, criterion: nn.Module, device: torch.device, num_epochs: int, checkpoint_path: Path, train_description: str, val_description: str, initial_best_miou: float = 0.0):
+def train_model(
+    model: nn.Module,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    optimizer: optim.Optimizer,
+    criterion: nn.Module,
+    device: torch.device,
+    num_epochs: int,
+    checkpoint_path: Path,
+    train_description: str,
+    val_description: str,
+    initial_best_miou: float = 0.0,
+):
     history = {"train_loss": [], "val_loss": [], "val_miou": [], "val_mdice": []}
     best_miou = initial_best_miou
     for epoch in range(num_epochs):
@@ -423,7 +445,10 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
         history["val_miou"].append(validation["miou"])
         history["val_mdice"].append(validation["mdice"])
         print(f"Train Loss: {average_train_loss:.4f} | Val Loss: {validation['loss']:.4f}")
-        print(f"Val mIoU: {validation['miou'] * 100:.2f}% | Val mDice: {validation['mdice'] * 100:.2f}%")
+        print(
+            f"Val mIoU: {validation['miou'] * 100:.2f}% | "
+            f"Val mDice: {validation['mdice'] * 100:.2f}%"
+        )
         if validation["miou"] > best_miou:
             best_miou = validation["miou"]
             torch.save(model.state_dict(), checkpoint_path)
@@ -439,17 +464,42 @@ def merge_histories(*histories: Dict[str, List[float]]) -> Dict[str, List[float]
     return merged
 
 
-def train_transfer_model(train_loader: DataLoader, val_loader: DataLoader, config: RuntimeConfig, device: torch.device):
+def train_transfer_model(
+    train_loader: DataLoader, val_loader: DataLoader, config: RuntimeConfig, device: torch.device
+):
     model = ResNet18UNet(pretrained=True).to(device)
     criterion = nn.CrossEntropyLoss(ignore_index=255)
     for parameter in model.encoder.parameters():
         parameter.requires_grad = False
     optimizer_phase1 = optim.Adam(model.decoder.parameters(), lr=1e-3)
-    phase1_history, best_miou = train_model(model, train_loader, val_loader, optimizer_phase1, criterion, device, config.transfer_phase1_epochs, BEST_TRANSFER_MODEL_PATH, "Transfer Phase 1 Train", "Transfer Phase 1 Validation")
+    phase1_history, best_miou = train_model(
+        model,
+        train_loader,
+        val_loader,
+        optimizer_phase1,
+        criterion,
+        device,
+        config.transfer_phase1_epochs,
+        BEST_TRANSFER_MODEL_PATH,
+        "Transfer Phase 1 Train",
+        "Transfer Phase 1 Validation",
+    )
     for parameter in model.parameters():
         parameter.requires_grad = True
     optimizer_phase2 = optim.Adam(model.parameters(), lr=1e-5)
-    phase2_history, _ = train_model(model, train_loader, val_loader, optimizer_phase2, criterion, device, config.transfer_phase2_epochs, BEST_TRANSFER_MODEL_PATH, "Transfer Phase 2 Train", "Transfer Phase 2 Validation", initial_best_miou=best_miou)
+    phase2_history, _ = train_model(
+        model,
+        train_loader,
+        val_loader,
+        optimizer_phase2,
+        criterion,
+        device,
+        config.transfer_phase2_epochs,
+        BEST_TRANSFER_MODEL_PATH,
+        "Transfer Phase 2 Train",
+        "Transfer Phase 2 Validation",
+        initial_best_miou=best_miou,
+    )
     return model, merge_histories(phase1_history, phase2_history)
 
 
@@ -460,7 +510,10 @@ def smoke_test_models(device: torch.device, image_size: Tuple[int, int]) -> None
     print(f"SimpleFCN output shape: {tuple(SimpleFCN(n_class=2).to(device)(dummy_input).shape)}")
     print(f"UNet output shape: {tuple(UNet(n_class=2).to(device)(dummy_input).shape)}")
     if smp is not None:
-        print(f"ResNet18 U-Net output shape: {tuple(ResNet18UNet(pretrained=False, n_class=2).to(device)(dummy_input).shape)}")
+        print(
+            "ResNet18 U-Net output shape: "
+            f"{tuple(ResNet18UNet(pretrained=False, n_class=2).to(device)(dummy_input).shape)}"
+        )
 
 
 def preview_mask_conversion(paths: DataPaths, sample_name: str = "Abyssinian_1") -> None:
@@ -480,7 +533,8 @@ def preview_mask_conversion(paths: DataPaths, sample_name: str = "Abyssinian_1")
     axes[1].axis("off")
     axes[2].set_title("Overlay")
     axes[2].imshow(image)
-    axes[2].imshow(np.ma.masked_where(converted_mask == 255, converted_mask), alpha=0.5, cmap="autumn")
+    axes[2].imshow(np.ma.masked_where(converted_mask == 255,
+                   converted_mask), alpha=0.5, cmap="autumn")
     axes[2].axis("off")
     plt.tight_layout()
     plt.show()
@@ -515,12 +569,14 @@ def analyze_class_balance(train_loader: DataLoader) -> None:
     print(f"Foreground pixels: {foreground_pixels}")
     print(f"Background pixels: {background_pixels}")
     print(f"Foreground ratio: {ratio * 100:.2f}%")
-    print("Warning: class imbalance detected." if ratio < 0.20 else "Class distribution is within a reasonable range.")
+    print("Warning: class imbalance detected." if ratio <
+          0.20 else "Class distribution is within a reasonable range.")
     plt.figure(figsize=(12, 12))
     for index in range(min(16, images.size(0))):
         plt.subplot(4, 4, index + 1)
         plt.imshow(images[index].permute(1, 2, 0).numpy())
-        plt.imshow(np.ma.masked_where(masks[index].numpy() == 255, masks[index].numpy()), alpha=0.4, cmap="jet")
+        plt.imshow(np.ma.masked_where(masks[index].numpy() ==
+                   255, masks[index].numpy()), alpha=0.4, cmap="jet")
         plt.axis("off")
     plt.tight_layout()
     plt.show()
@@ -553,15 +609,21 @@ def analyze_trimap_statistics(train_loader: DataLoader) -> None:
     plt.show()
 
 
-def plot_training_histories(fcn_history: Dict[str, List[float]], unet_history: Dict[str, List[float]]) -> None:
+def plot_training_histories(
+    fcn_history: Dict[str, List[float]], unet_history: Dict[str, List[float]]
+) -> None:
     figure, (axis_loss, axis_miou) = plt.subplots(1, 2, figsize=(15, 5))
-    axis_loss.plot(fcn_history["val_loss"], label="FCN validation loss", color="red", linestyle="--")
-    axis_loss.plot(unet_history["val_loss"], label="UNet validation loss", color="green", linewidth=2)
+    axis_loss.plot(fcn_history["val_loss"], label="FCN validation loss",
+                   color="red", linestyle="--")
+    axis_loss.plot(unet_history["val_loss"],
+                   label="UNet validation loss", color="green", linewidth=2)
     axis_loss.set_title("FCN vs UNet: validation loss")
     axis_loss.grid(True)
     axis_loss.legend()
-    axis_miou.plot(fcn_history["val_miou"], label="FCN validation mIoU", color="red", linestyle="--")
-    axis_miou.plot(unet_history["val_miou"], label="UNet validation mIoU", color="green", linewidth=2)
+    axis_miou.plot(fcn_history["val_miou"], label="FCN validation mIoU",
+                   color="red", linestyle="--")
+    axis_miou.plot(unet_history["val_miou"],
+                   label="UNet validation mIoU", color="green", linewidth=2)
     axis_miou.set_title("FCN vs UNet: validation mIoU")
     axis_miou.grid(True)
     axis_miou.legend()
@@ -586,10 +648,15 @@ def compare_fcn_unet_predictions(test_loader: DataLoader, device: torch.device) 
     if sample_count == 1:
         axes = np.expand_dims(axes, axis=0)
     for index in range(sample_count):
-        axes[index, 0].imshow(images_np[index]); axes[index, 0].axis("off")
-        axes[index, 1].imshow(np.ma.masked_where(masks_np[index] == 255, masks_np[index]), cmap="gray"); axes[index, 1].axis("off")
-        axes[index, 2].imshow(fcn_predictions[index], cmap="gray"); axes[index, 2].axis("off")
-        axes[index, 3].imshow(unet_predictions[index], cmap="gray"); axes[index, 3].axis("off")
+        axes[index, 0].imshow(images_np[index])
+        axes[index, 0].axis("off")
+        axes[index, 1].imshow(np.ma.masked_where(
+            masks_np[index] == 255, masks_np[index]), cmap="gray")
+        axes[index, 1].axis("off")
+        axes[index, 2].imshow(fcn_predictions[index], cmap="gray")
+        axes[index, 2].axis("off")
+        axes[index, 3].imshow(unet_predictions[index], cmap="gray")
+        axes[index, 3].axis("off")
     axes[0, 0].set_title("Original image")
     axes[0, 1].set_title("Ground-truth")
     axes[0, 2].set_title("FCN prediction")
@@ -623,10 +690,18 @@ def plot_sample_grid(samples: List[Dict[str, torch.Tensor]], title: str) -> None
         axes = np.expand_dims(axes, axis=0)
     figure.suptitle(title, fontsize=18, fontweight="bold", y=1.02)
     for row, sample in enumerate(samples):
-        axes[row, 0].imshow(denormalize_image(sample["image"])); axes[row, 0].set_title("Original image"); axes[row, 0].axis("off")
-        axes[row, 1].imshow(sample["mask"], cmap="gray"); axes[row, 1].set_title("Ground-truth"); axes[row, 1].axis("off")
-        axes[row, 2].imshow(sample["baseline_prediction"], cmap="gray"); axes[row, 2].set_title(f"Baseline IoU: {sample['baseline_iou'] * 100:.1f}%"); axes[row, 2].axis("off")
-        axes[row, 3].imshow(sample["augmented_prediction"], cmap="gray"); axes[row, 3].set_title(f"Augmented IoU: {sample['augmented_iou'] * 100:.1f}%"); axes[row, 3].axis("off")
+        axes[row, 0].imshow(denormalize_image(sample["image"]))
+        axes[row, 0].set_title("Original image")
+        axes[row, 0].axis("off")
+        axes[row, 1].imshow(sample["mask"], cmap="gray")
+        axes[row, 1].set_title("Ground-truth")
+        axes[row, 1].axis("off")
+        axes[row, 2].imshow(sample["baseline_prediction"], cmap="gray")
+        axes[row, 2].set_title(f"Baseline IoU: {sample['baseline_iou'] * 100:.1f}%")
+        axes[row, 2].axis("off")
+        axes[row, 3].imshow(sample["augmented_prediction"], cmap="gray")
+        axes[row, 3].set_title(f"Augmented IoU: {sample['augmented_iou'] * 100:.1f}%")
+        axes[row, 3].axis("off")
     plt.tight_layout()
     plt.show()
 
@@ -634,7 +709,8 @@ def plot_sample_grid(samples: List[Dict[str, torch.Tensor]], title: str) -> None
 def compare_augmentation_effects(test_loader: DataLoader, device: torch.device) -> None:
     baseline_model = load_checkpoint(UNet(n_class=2).to(device), BEST_UNET_MODEL_PATH, device)
     augmented_model = load_checkpoint(UNet(n_class=2).to(device), BEST_AUG_UNET_MODEL_PATH, device)
-    baseline_model.eval(); augmented_model.eval()
+    baseline_model.eval()
+    augmented_model.eval()
     improved_samples: List[Dict[str, torch.Tensor]] = []
     failed_samples: List[Dict[str, torch.Tensor]] = []
     with torch.no_grad():
@@ -646,7 +722,14 @@ def compare_augmentation_effects(test_loader: DataLoader, device: torch.device) 
             for index in range(images.size(0)):
                 baseline_iou = calculate_iou_for_image(baseline_predictions[index], masks[index])
                 augmented_iou = calculate_iou_for_image(augmented_predictions[index], masks[index])
-                sample = {"image": images[index].cpu(), "mask": masks[index].cpu(), "baseline_prediction": baseline_predictions[index].cpu(), "augmented_prediction": augmented_predictions[index].cpu(), "baseline_iou": baseline_iou, "augmented_iou": augmented_iou}
+                sample = {
+                    "image": images[index].cpu(),
+                    "mask": masks[index].cpu(),
+                    "baseline_prediction": baseline_predictions[index].cpu(),
+                    "augmented_prediction": augmented_predictions[index].cpu(),
+                    "baseline_iou": baseline_iou,
+                    "augmented_iou": augmented_iou,
+                }
                 if augmented_iou > baseline_iou + 0.15 and len(improved_samples) < 5:
                     improved_samples.append(sample)
                 if augmented_iou < 0.40 and baseline_iou < 0.40 and len(failed_samples) < 5:
@@ -659,8 +742,10 @@ def compare_augmentation_effects(test_loader: DataLoader, device: torch.device) 
 
 def compare_transfer_predictions(test_loader: DataLoader, device: torch.device) -> None:
     scratch_model = load_checkpoint(UNet(n_class=2).to(device), BEST_UNET_MODEL_PATH, device)
-    transfer_model = load_checkpoint(ResNet18UNet(pretrained=False, n_class=2).to(device), BEST_TRANSFER_MODEL_PATH, device)
-    scratch_model.eval(); transfer_model.eval()
+    transfer_model = load_checkpoint(ResNet18UNet(
+        pretrained=False, n_class=2).to(device), BEST_TRANSFER_MODEL_PATH, device)
+    scratch_model.eval()
+    transfer_model.eval()
     images, masks = next(iter(test_loader))
     sample_count = min(4, images.size(0))
     figure, axes = plt.subplots(sample_count, 4, figsize=(16, 4 * sample_count))
@@ -673,19 +758,31 @@ def compare_transfer_predictions(test_loader: DataLoader, device: torch.device) 
             image_input = image.unsqueeze(0).to(device)
             scratch_prediction = torch.argmax(scratch_model(image_input), dim=1).squeeze(0).cpu()
             transfer_prediction = torch.argmax(transfer_model(image_input), dim=1).squeeze(0).cpu()
-            axes[index, 0].imshow(denormalize_image(image)); axes[index, 0].set_title(f"Sample {index + 1}: original"); axes[index, 0].axis("off")
-            axes[index, 1].imshow(mask.cpu(), cmap="gray"); axes[index, 1].set_title("Ground-truth"); axes[index, 1].axis("off")
-            axes[index, 2].imshow(scratch_prediction, cmap="gray"); axes[index, 2].set_title("Scratch UNet"); axes[index, 2].axis("off")
-            axes[index, 3].imshow(transfer_prediction, cmap="gray"); axes[index, 3].set_title("ResNet18 UNet"); axes[index, 3].axis("off")
-    plt.tight_layout(); plt.show()
+            axes[index, 0].imshow(denormalize_image(image))
+            axes[index, 0].set_title(f"Sample {index + 1}: original")
+            axes[index, 0].axis("off")
+            axes[index, 1].imshow(mask.cpu(), cmap="gray")
+            axes[index, 1].set_title("Ground-truth")
+            axes[index, 1].axis("off")
+            axes[index, 2].imshow(scratch_prediction, cmap="gray")
+            axes[index, 2].set_title("Scratch UNet")
+            axes[index, 2].axis("off")
+            axes[index, 3].imshow(transfer_prediction, cmap="gray")
+            axes[index, 3].set_title("ResNet18 UNet")
+            axes[index, 3].axis("off")
+    plt.tight_layout()
+    plt.show()
 
 
 def compare_semantic_vs_instance(test_loader: DataLoader, device: torch.device) -> None:
     require_dependency(torchvision, "torchvision", "Mask R-CNN comparison")
     require_dependency(ndimage, "scipy", "instance counting")
-    semantic_model = load_checkpoint(ResNet18UNet(pretrained=False, n_class=2).to(device), BEST_TRANSFER_MODEL_PATH, device)
-    instance_model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights="DEFAULT").to(device)
-    semantic_model.eval(); instance_model.eval()
+    semantic_model = load_checkpoint(ResNet18UNet(
+        pretrained=False, n_class=2).to(device), BEST_TRANSFER_MODEL_PATH, device)
+    instance_model = torchvision.models.detection.maskrcnn_resnet50_fpn(
+        weights="DEFAULT").to(device)
+    semantic_model.eval()
+    instance_model.eval()
     if device.type == "cuda":
         torch.cuda.empty_cache()
     images, _ = next(iter(test_loader))
@@ -704,25 +801,51 @@ def compare_semantic_vs_instance(test_loader: DataLoader, device: torch.device) 
             single_image = torch.clamp(image_cpu, 0, 1).to(device)
             instance_output = instance_model([single_image])[0]
             image_display = single_image.cpu().permute(1, 2, 0).numpy()
-            axes[index, 0].imshow(image_display); axes[index, 0].set_title("Original image"); axes[index, 0].axis("off")
+            axes[index, 0].imshow(image_display)
+            axes[index, 0].set_title("Original image")
+            axes[index, 0].axis("off")
             semantic_mask = semantic_predictions[index].cpu().numpy()
             labeled_mask, instance_count = ndimage.label((semantic_mask == 1).astype(np.uint8))
-            axes[index, 1].imshow(image_display); axes[index, 1].imshow(labeled_mask, cmap="jet", alpha=0.5); axes[index, 1].set_title(f"Semantic U-Net ({instance_count})"); axes[index, 1].axis("off")
+            axes[index, 1].imshow(image_display)
+            axes[index, 1].imshow(labeled_mask, cmap="jet", alpha=0.5)
+            axes[index, 1].set_title(f"Semantic U-Net ({instance_count})")
+            axes[index, 1].axis("off")
             for object_index in range(1, instance_count + 1):
                 positions = np.where(labeled_mask == object_index)
                 if len(positions[0]) > 0:
                     y_min, y_max = np.min(positions[0]), np.max(positions[0])
                     x_min, x_max = np.min(positions[1]), np.max(positions[1])
-                    axes[index, 1].add_patch(patches.Rectangle((x_min, y_min), x_max - x_min, y_max - y_min, linewidth=2, edgecolor="red", facecolor="none"))
-            axes[index, 2].imshow(image_display); axes[index, 2].axis("off")
+                    axes[index, 1].add_patch(
+                        patches.Rectangle(
+                            (x_min, y_min),
+                            x_max - x_min,
+                            y_max - y_min,
+                            linewidth=2,
+                            edgecolor="red",
+                            facecolor="none",
+                        )
+                    )
+            axes[index, 2].imshow(image_display)
+            axes[index, 2].axis("off")
             valid_indices = np.where(instance_output["scores"].cpu().numpy() > 0.5)[0]
             axes[index, 2].set_title(f"Mask R-CNN ({len(valid_indices)})")
             for valid_index in valid_indices:
                 x_min, y_min, x_max, y_max = instance_output["boxes"][valid_index].cpu().numpy()
-                axes[index, 2].add_patch(patches.Rectangle((x_min, y_min), x_max - x_min, y_max - y_min, linewidth=2, edgecolor="lime", facecolor="none"))
+                axes[index, 2].add_patch(
+                    patches.Rectangle(
+                        (x_min, y_min),
+                        x_max - x_min,
+                        y_max - y_min,
+                        linewidth=2,
+                        edgecolor="lime",
+                        facecolor="none",
+                    )
+                )
                 instance_mask = instance_output["masks"][valid_index, 0].cpu().numpy()
-                axes[index, 2].imshow(np.ma.masked_where(instance_mask < 0.5, instance_mask), cmap="Greens", alpha=0.5)
-    plt.tight_layout(); plt.show()
+                axes[index, 2].imshow(np.ma.masked_where(instance_mask < 0.5,
+                                      instance_mask), cmap="Greens", alpha=0.5)
+    plt.tight_layout()
+    plt.show()
 
 
 def analyze_image_size_distribution(paths: DataPaths) -> None:
@@ -734,8 +857,14 @@ def analyze_image_size_distribution(paths: DataPaths) -> None:
             widths.append(width)
             heights.append(height)
     print("--- Original image size distribution ---")
-    print(f"Width  -> min: {np.min(widths)} px | max: {np.max(widths)} px | mean: {np.mean(widths):.0f} px")
-    print(f"Height -> min: {np.min(heights)} px | max: {np.max(heights)} px | mean: {np.mean(heights):.0f} px")
+    print(
+        f"Width  -> min: {np.min(widths)} px | max: {np.max(widths)} px | "
+        f"mean: {np.mean(widths):.0f} px"
+    )
+    print(
+        f"Height -> min: {np.min(heights)} px | max: {np.max(heights)} px | "
+        f"mean: {np.mean(heights):.0f} px"
+    )
 
 
 def compare_yolo_runtime(test_loader: DataLoader, device: torch.device) -> None:
@@ -754,7 +883,9 @@ def compare_yolo_runtime(test_loader: DataLoader, device: torch.device) -> None:
         image_tensor = images[index]
         image_np = denormalize_image(image_tensor)
         image_yolo = np.ascontiguousarray((image_np * 255).astype(np.uint8))
-        yolo_start = time.perf_counter(); yolo_result = yolo_model(image_yolo, verbose=False); yolo_duration = time.perf_counter() - yolo_start
+        yolo_start = time.perf_counter()
+        yolo_result = yolo_model(image_yolo, verbose=False)
+        yolo_duration = time.perf_counter() - yolo_start
         total_yolo_time += yolo_duration
         unet_start = time.perf_counter()
         with torch.no_grad():
@@ -762,10 +893,17 @@ def compare_yolo_runtime(test_loader: DataLoader, device: torch.device) -> None:
             unet_prediction = torch.argmax(unet_output, dim=1).squeeze(0).cpu()
         unet_duration = time.perf_counter() - unet_start
         total_unet_time += unet_duration
-        axes[index, 0].imshow(image_np); axes[index, 0].set_title("Original image"); axes[index, 0].axis("off")
-        axes[index, 1].imshow(unet_prediction, cmap="gray"); axes[index, 1].set_title(f"U-Net ({unet_duration:.4f} s)"); axes[index, 1].axis("off")
-        axes[index, 2].imshow(yolo_result[0].plot()[..., ::-1]); axes[index, 2].set_title(f"YOLOv8 ({yolo_duration:.4f} s)"); axes[index, 2].axis("off")
-    plt.tight_layout(); plt.show()
+        axes[index, 0].imshow(image_np)
+        axes[index, 0].set_title("Original image")
+        axes[index, 0].axis("off")
+        axes[index, 1].imshow(unet_prediction, cmap="gray")
+        axes[index, 1].set_title(f"U-Net ({unet_duration:.4f} s)")
+        axes[index, 1].axis("off")
+        axes[index, 2].imshow(yolo_result[0].plot()[..., ::-1])
+        axes[index, 2].set_title(f"YOLOv8 ({yolo_duration:.4f} s)")
+        axes[index, 2].axis("off")
+    plt.tight_layout()
+    plt.show()
     print(f"Average U-Net inference time: {total_unet_time / sample_count:.4f} seconds/image")
     print(f"Average YOLOv8 inference time: {total_yolo_time / sample_count:.4f} seconds/image")
 
@@ -775,19 +913,25 @@ def print_parameter_summary(device: torch.device) -> None:
     print(f"SimpleFCN: {count_model_parameters(SimpleFCN(n_class=2).to(device))}")
     print(f"UNet: {count_model_parameters(UNet(n_class=2).to(device))}")
     if smp is not None:
-        print(f"ResNet18 U-Net: {count_model_parameters(ResNet18UNet(pretrained=False, n_class=2).to(device))}")
+        print(
+            "ResNet18 U-Net: "
+            f"{count_model_parameters(ResNet18UNet(pretrained=False, n_class=2).to(device))}"
+        )
 
 
 def validate_data_paths(paths: DataPaths) -> None:
-    required_paths = [paths.image_dir, paths.annotations_dir, paths.trimap_dir, paths.trainval_path, paths.test_path]
+    required_paths = [paths.image_dir, paths.annotations_dir,
+        paths.trimap_dir, paths.trainval_path, paths.test_path]
     missing_paths = [path for path in required_paths if not path.exists()]
     if missing_paths:
         missing_block = "\n".join(f"- {path}" for path in missing_paths)
-        raise FileNotFoundError(f"The following required dataset paths are missing:\n{missing_block}")
+        raise FileNotFoundError(
+            f"The following required dataset paths are missing:\n{missing_block}")
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Semantic segmentation pipeline for the Oxford-IIIT Pet dataset")
+    parser = argparse.ArgumentParser(
+        description="Semantic segmentation pipeline for the Oxford-IIIT Pet dataset")
     parser.add_argument("--data-root", type=Path, default=DATA_ROOT)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--batch-size", type=int, default=16)
@@ -816,7 +960,26 @@ def build_argument_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_argument_parser()
     args = parser.parse_args()
-    selected_actions = [args.preview_sample, args.preview_loader, args.analyze_class_balance, args.analyze_trimap, args.smoke_test_models, args.train_fcn, args.train_unet, args.train_augmented_unet, args.train_transfer, args.plot_histories, args.check_data_health, args.compare_fcn_unet, args.compare_augmentation, args.compare_transfer, args.compare_semantic_instance, args.analyze_image_sizes, args.compare_yolo, args.count_parameters]
+    selected_actions = [
+        args.preview_sample,
+        args.preview_loader,
+        args.analyze_class_balance,
+        args.analyze_trimap,
+        args.smoke_test_models,
+        args.train_fcn,
+        args.train_unet,
+        args.train_augmented_unet,
+        args.train_transfer,
+        args.plot_histories,
+        args.check_data_health,
+        args.compare_fcn_unet,
+        args.compare_augmentation,
+        args.compare_transfer,
+        args.compare_semantic_instance,
+        args.analyze_image_sizes,
+        args.compare_yolo,
+        args.count_parameters,
+    ]
     if not any(selected_actions):
         parser.print_help()
         return
@@ -831,7 +994,24 @@ def main() -> None:
     if args.analyze_image_sizes:
         validate_data_paths(paths)
         analyze_image_size_distribution(paths)
-    needs_standard_data = any([args.preview_sample, args.preview_loader, args.analyze_class_balance, args.analyze_trimap, args.train_fcn, args.train_unet, args.train_transfer, args.plot_histories, args.check_data_health, args.compare_fcn_unet, args.compare_augmentation, args.compare_transfer, args.compare_semantic_instance, args.compare_yolo])
+    needs_standard_data = any(
+        [
+            args.preview_sample,
+            args.preview_loader,
+            args.analyze_class_balance,
+            args.analyze_trimap,
+            args.train_fcn,
+            args.train_unet,
+            args.train_transfer,
+            args.plot_histories,
+            args.check_data_health,
+            args.compare_fcn_unet,
+            args.compare_augmentation,
+            args.compare_transfer,
+            args.compare_semantic_instance,
+            args.compare_yolo,
+        ]
+    )
     train_loader = test_loader = None
     fcn_history = unet_history = None
     if needs_standard_data:
@@ -848,21 +1028,57 @@ def main() -> None:
         analyze_trimap_statistics(train_loader)
     if args.train_fcn and train_loader is not None and test_loader is not None:
         fcn_model = SimpleFCN(n_class=2).to(device)
-        fcn_history, best_miou = train_model(fcn_model, train_loader, test_loader, optim.Adam(fcn_model.parameters(), lr=config.learning_rate), nn.CrossEntropyLoss(ignore_index=255), device, config.num_epochs, BEST_FCN_MODEL_PATH, "FCN Train", "FCN Validation")
+        fcn_history, best_miou = train_model(
+            fcn_model,
+            train_loader,
+            test_loader,
+            optim.Adam(fcn_model.parameters(), lr=config.learning_rate),
+            nn.CrossEntropyLoss(ignore_index=255),
+            device,
+            config.num_epochs,
+            BEST_FCN_MODEL_PATH,
+            "FCN Train",
+            "FCN Validation",
+        )
         print(f"SimpleFCN training complete. Best mIoU: {best_miou * 100:.2f}%")
     if args.train_unet and train_loader is not None and test_loader is not None:
         unet_model = UNet(n_class=2).to(device)
-        unet_history, best_miou = train_model(unet_model, train_loader, test_loader, optim.Adam(unet_model.parameters(), lr=config.learning_rate), nn.CrossEntropyLoss(ignore_index=255), device, config.num_epochs, BEST_UNET_MODEL_PATH, "UNet Train", "UNet Validation")
+        unet_history, best_miou = train_model(
+            unet_model,
+            train_loader,
+            test_loader,
+            optim.Adam(unet_model.parameters(), lr=config.learning_rate),
+            nn.CrossEntropyLoss(ignore_index=255),
+            device,
+            config.num_epochs,
+            BEST_UNET_MODEL_PATH,
+            "UNet Train",
+            "UNet Validation",
+        )
         print(f"UNet training complete. Best mIoU: {best_miou * 100:.2f}%")
     if args.train_augmented_unet:
         validate_data_paths(paths)
         augmented_train_loader, augmented_test_loader = create_augmented_loaders(paths, config)
         augmented_model = UNet(n_class=2).to(device)
-        _, best_miou = train_model(augmented_model, augmented_train_loader, augmented_test_loader, optim.Adam(augmented_model.parameters(), lr=config.learning_rate), nn.CrossEntropyLoss(ignore_index=255), device, config.num_epochs, BEST_AUG_UNET_MODEL_PATH, "Augmented UNet Train", "Augmented UNet Validation")
+        _, best_miou = train_model(
+            augmented_model,
+            augmented_train_loader,
+            augmented_test_loader,
+            optim.Adam(augmented_model.parameters(), lr=config.learning_rate),
+            nn.CrossEntropyLoss(ignore_index=255),
+            device,
+            config.num_epochs,
+            BEST_AUG_UNET_MODEL_PATH,
+            "Augmented UNet Train",
+            "Augmented UNet Validation",
+        )
         print(f"Augmented UNet training complete. Best mIoU: {best_miou * 100:.2f}%")
     if args.train_transfer and train_loader is not None and test_loader is not None:
         _, transfer_history = train_transfer_model(train_loader, test_loader, config, device)
-        print(f"Transfer learning complete. Collected {len(transfer_history['val_miou'])} validation points.")
+        print(
+            "Transfer learning complete. Collected "
+            f"{len(transfer_history['val_miou'])} validation points."
+        )
     if args.plot_histories:
         if fcn_history is None or unet_history is None:
             print("History plotting requires --train-fcn and --train-unet in the same session.")
@@ -885,4 +1101,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
